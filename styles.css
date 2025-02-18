@@ -22,6 +22,14 @@ h1 {
     margin-bottom: 30px;
 }
 
+.version {
+    color: #666;
+    font-size: 12px;
+    margin-top: -25px;
+    margin-bottom: 20px;
+    font-family: monospace;
+}
+
 .counter-display {
     background-color: white;
     border-radius: 15px;
