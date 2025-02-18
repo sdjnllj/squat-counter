@@ -18,7 +18,10 @@ class SquatCounter {
         // 绑定事件处理器
         this.startBtn.addEventListener('click', () => this.toggleTracking());
         this.resetBtn.addEventListener('click', () => this.reset());
-        this.sensitivitySlider.addEventListener('input', () => this.updateSensitivity());
+        this.sensitivitySlider.addEventListener('input', (e) => {
+            console.log('Sensitivity changed:', e.target.value); // 添加调试日志
+            this.updateSensitivity();
+        });
 
         // 初始化灵敏度显示
         this.updateSensitivity();
@@ -32,7 +35,7 @@ class SquatCounter {
         }
 
         // 请求传感器权限（某些浏览器需要）
-        if (DeviceMotionEvent.requestPermission) {
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
             this.startBtn.addEventListener('click', async () => {
                 try {
                     const permission = await DeviceMotionEvent.requestPermission();
@@ -51,6 +54,7 @@ class SquatCounter {
 
     updateSensitivity() {
         const value = parseFloat(this.sensitivitySlider.value);
+        console.log('Updating sensitivity to:', value); // 添加调试日志
         this.threshold = 11 - value; // 反转值：滑块值越大，阈值越小，即灵敏度越高
         this.sensitivityValue.textContent = value.toFixed(1);
         
@@ -118,5 +122,8 @@ class SquatCounter {
     }
 }
 
-// 初始化应用
-const squatCounter = new SquatCounter();
+// 等待 DOM 加载完成后再初始化应用
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing app...'); // 添加调试日志
+    window.squatCounter = new SquatCounter();
+});
