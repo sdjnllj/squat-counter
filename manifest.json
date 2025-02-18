@@ -1,0 +1,16 @@
+{
+    "name": "蹲起计数器",
+    "short_name": "计数器",
+    "description": "帮助记录蹲起运动次数的应用",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#1a73e8",
+    "icons": [
+        {
+            "src": "icon.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        }
+    ]
+}

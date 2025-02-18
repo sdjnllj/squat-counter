@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PS选区粘贴工具</title>
+    <style>
+        body {
+            margin: 20px;
+            background-color: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        #container {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        #pasteArea {
+            min-height: 300px;
+            border: 2px dashed #999;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            background-color: white;
+            transition: all 0.3s ease;
+        }
+        #pasteArea.dragover {
+            border-color: #4a90e2;
+            background-color: #f8f9fa;
+        }
+        img {
+            max-width: 100%;
+            max-height: 70vh;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+        .meta-info {
+            margin-top: 12px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+            color: #4a5568;
+            font-size: 14px;
+            text-align: left;
+            border: 1px solid #e2e8f0;
+        }
+        .meta-info span {
+            display: block;
+            margin: 4px 0;
+        }
+        .meta-info .copy-button {
+            float: right;
+            padding: 4px 8px;
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .meta-info .copy-button:hover {
+            background-color: #357abd;
+        }
+        .title {
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+        .instructions {
+            color: #718096;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1 class="title">PS选区粘贴工具</h1>
+        <div id="pasteArea">
+            <div class="instructions">
+                <p>操作步骤：</p>
+                <p>1. 在PS中使用选区工具选择区域</p>
+                <p>2. 按 Ctrl+C 复制选区</p>
+                <p>3. 回到此页面按 Ctrl+V 粘贴</p>
+            </div>
+        </div>
+        <div id="preview"></div>
+    </div>
+
+    <script>
+        // 格式化文件大小
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+        }
+
+        // 复制文本到剪贴板
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const button = document.querySelector('.copy-button');
+                button.textContent = '已复制!';
+                setTimeout(() => {
+                    button.textContent = '复制信息';
+                }, 2000);
+            }).catch(err => {
+                console.error('复制失败:', err);
+            });
+        }
+
+        // 处理粘贴事件
+        window.addEventListener('paste', async (e) => {
+            e.preventDefault();
+            
+            // 获取剪贴板数据
+            const items = (e.clipboardData || window.clipboardData).items;
+            
+            // 查找图像数据
+            for (const item of items) {
+                if (item.type.indexOf('image') === 0) {
+                    const blob = item.getAsFile();
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(event) {
+                        // 创建图片元素
+                        const img = new Image();
+                        img.src = event.target.result;
+                        
+                        // 图片加载完成后显示信息
+                        img.onload = function() {
+                            // 清空预览区并显示图片
+                            const preview = document.getElementById('preview');
+                            preview.innerHTML = '';
+                            preview.appendChild(img);
+
+                            // 创建元信息容器
+                            const metaInfo = document.createElement('div');
+                            metaInfo.className = 'meta-info';
+
+                            // 准备元信息文本
+                            const format = item.type.replace('image/', '').toUpperCase();
+                            const dimensions = `${img.naturalWidth}x${img.naturalHeight}`;
+                            const size = formatSize(blob.size);
+
+                            // 创建复制按钮
+                            const copyButton = document.createElement('button');
+                            copyButton.className = 'copy-button';
+                            copyButton.textContent = '复制信息';
+                            copyButton.onclick = () => {
+                                const infoText = `格式：${format}\n尺寸：${dimensions}px\n大小：${size}`;
+                                copyToClipboard(infoText);
+                            };
+
+                            // 添加所有信息
+                            metaInfo.innerHTML = `
+                                <span>格式：${format}</span>
+                                <span>尺寸：${dimensions}px</span>
+                                <span>大小：${size}</span>
+                            `;
+                            metaInfo.appendChild(copyButton);
+
+                            // 添加到预览区
+                            preview.appendChild(metaInfo);
+                        };
+                        
+                        // 更新粘贴区域样式
+                        document.getElementById('pasteArea').style.minHeight = 'auto';
+                    };
+                    
+                    reader.readAsDataURL(blob);
+                    break;
+                }
+            }
+        });
+
+        // 初始化提示
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!navigator.clipboard) {
+                alert('建议使用最新版Chrome/Firefox/Edge浏览器以获得最佳体验');
+            }
+        });
+
+        // 添加拖放支持
+        const pasteArea = document.getElementById('pasteArea');
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            pasteArea.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            pasteArea.addEventListener(eventName, () => {
+                pasteArea.classList.add('dragover');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            pasteArea.addEventListener(eventName, () => {
+                pasteArea.classList.remove('dragover');
+            });
+        });
+    </script>
+</body>
+</html>
