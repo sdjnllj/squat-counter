@@ -3,107 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>蹲起数据收集</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        h1 {
-            color: #1a73e8;
-            margin-bottom: 30px;
-        }
-        .timer {
-            font-size: 48px;
-            font-weight: bold;
-            margin: 20px 0;
-            color: #333;
-        }
-        .status {
-            font-size: 18px;
-            margin: 20px 0;
-            padding: 10px;
-            border-radius: 5px;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .btn {
-            background-color: #1a73e8;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 16px;
-            border-radius: 24px;
-            cursor: pointer;
-            margin: 10px;
-            transition: background-color 0.3s;
-        }
-        .btn:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        .btn.record {
-            background-color: #34a853;
-        }
-        .btn.stop {
-            background-color: #ea4335;
-        }
-        .instructions {
-            text-align: left;
-            margin: 20px auto;
-            padding: 15px;
-            background-color: #fff;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .instructions ol {
-            margin: 10px 0;
-            padding-left: 20px;
-        }
-        .data-status {
-            font-family: monospace;
-            font-size: 12px;
-            margin-top: 20px;
-            color: #666;
-        }
-        .version {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 10px;
-        }
-    </style>
+    <title>蹲起计数器</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>蹲起数据收集</h1>
-        <div class="version">v1.3.0</div>
-        <div class="timer" id="timer">00:00</div>
-        <div class="status" id="status">准备就绪</div>
-        <div>
-            <button id="startBtn" class="btn">开始记录</button>
-            <button id="stopBtn" class="btn stop" disabled>停止记录</button>
-            <button id="downloadBtn" class="btn" disabled>下载数据</button>
+        <h1>蹲起计数器</h1>
+        <div class="version">v1.4.0</div>
+        <div class="counter-display">
+            <span id="counter">0</span>
+            <span class="label">次</span>
         </div>
+        <div class="buttons">
+            <button id="startBtn" class="btn">开始</button>
+            <button id="resetBtn" class="btn">重置</button>
+        </div>
+        <div class="sensitivity-control">
+            <label for="sensitivity">动作速度：<span id="sensitivityValue">3</span></label>
+            <input type="range" id="sensitivity" min="1" max="10" step="0.5" value="3">
+        </div>
+        <div class="status" id="status">准备就绪</div>
+        <div id="debug" class="debug"></div>
         <div class="instructions">
             <p>使用说明：</p>
             <ol>
-                <li>将手机放入口袋或手持</li>
-                <li>点击"开始记录"</li>
-                <li>等待3秒倒计时</li>
-                <li>连续做10个标准速度的蹲起</li>
-                <li>完成后点击"停止记录"</li>
-                <li>点击"下载数据"保存</li>
+                <li>点击"开始"按钮</li>
+                <li>将手机放在口袋里或手里</li>
+                <li>开始做蹲起运动</li>
+                <li>完成后点击"重置"</li>
             </ol>
         </div>
-        <div class="data-status" id="dataStatus"></div>
     </div>
-    <script src="data-collector.js"></script>
+    <script src="app.js?v=1.4.0"></script>
 </body>
 </html>

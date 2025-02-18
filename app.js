@@ -1,15 +1,34 @@
 class SquatCounter {
     constructor() {
+        // 状态和计数器
         this.counter = 0;
         this.isTracking = false;
-        this.lastY = 0;
-        this.threshold = 5; // 默认灵敏度
-        this.cooldown = false;
-        this.cooldownTime = 1000; // 防重复计数的冷却时间（毫秒）
-        this.motionBuffer = []; // 用于存储最近的运动数据
-        this.bufferSize = 3; // 缓冲区大小
+        this.squatState = 'standing'; // 'standing', 'squatting', 'rising'
+        this.lastStateChangeTime = 0;
         
-        // 初始化音频上下文
+        // 运动检测参数
+        this.accelerationBuffer = [];
+        this.orientationBuffer = [];
+        this.bufferSize = 5; // 滑动窗口大小
+        
+        // 动作阈值（基于数据分析）
+        this.thresholds = {
+            standing: {
+                yAccel: -8,      // 站立时的典型Y轴加速度
+                beta: 35         // 站立时的典型Beta角度
+            },
+            squatting: {
+                yAccel: -3.5,    // 下蹲时的典型Y轴加速度
+                beta: 65         // 下蹲时的典型Beta角度
+            }
+        };
+        
+        // 时间窗口限制
+        this.minActionTime = 1000;  // 最小动作时间（毫秒）
+        this.maxActionTime = 4000;  // 最大动作时间（毫秒）
+        this.cooldownTime = 500;    // 状态改变后的冷却时间
+        
+        // 音频反馈
         this.audioContext = null;
         this.initAudioContext();
 
@@ -20,46 +39,46 @@ class SquatCounter {
         this.statusDisplay = document.getElementById('status');
         this.sensitivitySlider = document.getElementById('sensitivity');
         this.sensitivityValue = document.getElementById('sensitivityValue');
+        this.debugDisplay = document.getElementById('debug');
 
         // 绑定事件处理器
         this.startBtn.addEventListener('click', () => this.toggleTracking());
         this.resetBtn.addEventListener('click', () => this.reset());
-        this.sensitivitySlider.addEventListener('input', (e) => {
-            console.log('Sensitivity changed:', e.target.value);
-            this.updateSensitivity();
-        });
+        this.sensitivitySlider.addEventListener('input', (e) => this.updateSensitivity());
 
-        // 初始化灵敏度显示
+        // 初始化传感器
+        this.initializeSensors();
         this.updateSensitivity();
+    }
 
-        // 检查设备运动传感器支持
-        if (window.DeviceMotionEvent) {
-            window.addEventListener('devicemotion', (event) => this.handleMotion(event));
-        } else {
-            this.statusDisplay.textContent = '您的设备不支持运动传感器';
-            this.startBtn.disabled = true;
-        }
-
-        // 请求传感器权限（某些浏览器需要）
-        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-            this.startBtn.addEventListener('click', async () => {
-                try {
-                    const permission = await DeviceMotionEvent.requestPermission();
-                    if (permission === 'granted') {
-                        this.toggleTracking();
-                    } else {
-                        this.statusDisplay.textContent = '需要传感器权限才能使用';
-                    }
-                } catch (error) {
-                    console.error('Error requesting motion permission:', error);
-                    this.statusDisplay.textContent = '获取权限失败';
+    async initializeSensors() {
+        try {
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                const motionPermission = await DeviceMotionEvent.requestPermission();
+                if (motionPermission !== 'granted') {
+                    throw new Error('需要运动传感器权限');
                 }
-            });
+            }
+            
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                const orientationPermission = await DeviceOrientationEvent.requestPermission();
+                if (orientationPermission !== 'granted') {
+                    throw new Error('需要方向传感器权限');
+                }
+            }
+
+            window.addEventListener('devicemotion', (event) => this.handleMotion(event));
+            window.addEventListener('deviceorientation', (event) => this.handleOrientation(event));
+            
+            this.statusDisplay.textContent = '准备就绪';
+        } catch (error) {
+            console.error('Error initializing sensors:', error);
+            this.statusDisplay.textContent = '初始化传感器失败: ' + error.message;
+            this.startBtn.disabled = true;
         }
     }
 
     initAudioContext() {
-        // 在用户交互时初始化音频上下文
         const initAudio = () => {
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -69,89 +88,139 @@ class SquatCounter {
         document.addEventListener('click', initAudio);
     }
 
-    playCountSound() {
-        if (!this.audioContext) return;
-
-        // 创建音调
-        const oscillator = this.audioContext.createOscillator();
-        const gainNode = this.audioContext.createGain();
-        
-        // 设置音调参数
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(880, this.audioContext.currentTime); // A5音
-        
-        // 设置音量包络
-        gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.01);
-        gainNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.15);
-        
-        // 连接节点
-        oscillator.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
-        
-        // 播放声音
-        oscillator.start();
-        oscillator.stop(this.audioContext.currentTime + 0.15);
-    }
-
     updateSensitivity() {
         const value = parseFloat(this.sensitivitySlider.value);
-        // 使用非线性映射来调整灵敏度
-        // 当滑块值较小时，阈值变化较大；当滑块值较大时，阈值变化较小
-        this.threshold = 8 - Math.pow(value / 10, 1.5) * 7;
-        console.log('New threshold:', this.threshold);
+        // 根据速度设置调整时间窗口
+        this.minActionTime = 2000 - value * 150; // 850ms - 1850ms
+        this.maxActionTime = 4000 - value * 250; // 1500ms - 3500ms
         this.sensitivityValue.textContent = value.toFixed(1);
         
-        // 更新状态显示
         if (this.isTracking) {
-            this.statusDisplay.textContent = `正在计数...（灵敏度：${value.toFixed(1)}）`;
+            this.statusDisplay.textContent = `正在计数...（速度：${value.toFixed(1)}）`;
         }
     }
 
     handleMotion(event) {
-        if (!this.isTracking || this.cooldown) return;
+        if (!this.isTracking) return;
 
         const acceleration = event.accelerationIncludingGravity;
         if (!acceleration) return;
 
-        const currentY = acceleration.y;
-        
-        // 将当前运动数据添加到缓冲区
-        this.motionBuffer.push(Math.abs(currentY - this.lastY));
-        if (this.motionBuffer.length > this.bufferSize) {
-            this.motionBuffer.shift(); // 移除最旧的数据
+        // 更新加速度缓冲区
+        this.accelerationBuffer.push({
+            y: acceleration.y
+        });
+        if (this.accelerationBuffer.length > this.bufferSize) {
+            this.accelerationBuffer.shift();
         }
 
-        // 计算平均运动幅度
-        const averageMotion = this.motionBuffer.reduce((a, b) => a + b, 0) / this.motionBuffer.length;
+        // 计算平均Y轴加速度
+        const avgYAccel = this.accelerationBuffer.reduce((sum, acc) => sum + acc.y, 0) / this.accelerationBuffer.length;
         
-        // 检测向上运动（完成一次蹲起）
-        if (averageMotion > this.threshold) {
-            this.incrementCounter();
-            this.setCooldown();
-            console.log('Motion detected:', averageMotion, 'Threshold:', this.threshold);
+        this.updateState(avgYAccel);
+    }
+
+    handleOrientation(event) {
+        if (!this.isTracking) return;
+
+        // 更新方向缓冲区
+        this.orientationBuffer.push({
+            beta: event.beta
+        });
+        if (this.orientationBuffer.length > this.bufferSize) {
+            this.orientationBuffer.shift();
         }
 
-        this.lastY = currentY;
+        // 计算平均Beta角度
+        const avgBeta = this.orientationBuffer.reduce((sum, ori) => sum + ori.beta, 0) / this.orientationBuffer.length;
+        
+        if (this.debugDisplay) {
+            this.debugDisplay.textContent = `Beta: ${avgBeta.toFixed(1)}°, Y加速度: ${this.accelerationBuffer.length > 0 ? this.accelerationBuffer[this.accelerationBuffer.length - 1].y.toFixed(2) : 'N/A'}`;
+        }
+    }
+
+    updateState(currentYAccel) {
+        const now = Date.now();
+        const timeSinceLastChange = now - this.lastStateChangeTime;
+        
+        // 获取当前平均Beta角度
+        const avgBeta = this.orientationBuffer.length > 0 ?
+            this.orientationBuffer.reduce((sum, ori) => sum + ori.beta, 0) / this.orientationBuffer.length :
+            0;
+
+        // 状态机逻辑
+        switch (this.squatState) {
+            case 'standing':
+                // 检测下蹲开始
+                if (timeSinceLastChange > this.cooldownTime &&
+                    currentYAccel > this.thresholds.squatting.yAccel &&
+                    avgBeta > this.thresholds.squatting.beta) {
+                    this.squatState = 'squatting';
+                    this.lastStateChangeTime = now;
+                }
+                break;
+
+            case 'squatting':
+                // 检测起立开始
+                if (timeSinceLastChange > this.minActionTime &&
+                    currentYAccel < this.thresholds.standing.yAccel &&
+                    avgBeta < this.thresholds.standing.beta) {
+                    this.squatState = 'rising';
+                    this.lastStateChangeTime = now;
+                }
+                // 如果蹲得太久，重置状态
+                else if (timeSinceLastChange > this.maxActionTime) {
+                    this.squatState = 'standing';
+                    this.lastStateChangeTime = now;
+                }
+                break;
+
+            case 'rising':
+                // 完成一次蹲起
+                if (timeSinceLastChange > this.cooldownTime &&
+                    currentYAccel >= this.thresholds.standing.yAccel * 0.8 &&
+                    avgBeta <= this.thresholds.standing.beta * 1.2) {
+                    this.squatState = 'standing';
+                    this.lastStateChangeTime = now;
+                    this.incrementCounter();
+                }
+                // 如果起立时间太长，重置状态
+                else if (timeSinceLastChange > this.maxActionTime) {
+                    this.squatState = 'standing';
+                    this.lastStateChangeTime = now;
+                }
+                break;
+        }
+    }
+
+    playCountSound() {
+        if (!this.audioContext) return;
+
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, this.audioContext.currentTime);
+        
+        gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.01);
+        gainNode.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.15);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        oscillator.start();
+        oscillator.stop(this.audioContext.currentTime + 0.15);
     }
 
     incrementCounter() {
         this.counter++;
         this.counterDisplay.textContent = this.counter;
-        // 播放声音反馈
         this.playCountSound();
-        // 添加视觉反馈
         this.counterDisplay.style.transform = 'scale(1.2)';
         setTimeout(() => {
             this.counterDisplay.style.transform = 'scale(1)';
         }, 200);
-    }
-
-    setCooldown() {
-        this.cooldown = true;
-        setTimeout(() => {
-            this.cooldown = false;
-        }, this.cooldownTime);
     }
 
     toggleTracking() {
@@ -159,12 +228,14 @@ class SquatCounter {
         this.startBtn.textContent = this.isTracking ? '暂停' : '开始';
         const sensitivity = parseFloat(this.sensitivitySlider.value).toFixed(1);
         this.statusDisplay.textContent = this.isTracking ? 
-            `正在计数...（灵敏度：${sensitivity}）` : '已暂停';
+            `正在计数...（速度：${sensitivity}）` : '已暂停';
         
         if (this.isTracking) {
             this.startBtn.style.backgroundColor = '#dc3545';
-            // 重置运动缓冲区
-            this.motionBuffer = [];
+            this.accelerationBuffer = [];
+            this.orientationBuffer = [];
+            this.squatState = 'standing';
+            this.lastStateChangeTime = Date.now();
         } else {
             this.startBtn.style.backgroundColor = '#1a73e8';
         }
@@ -177,7 +248,10 @@ class SquatCounter {
         this.startBtn.textContent = '开始';
         this.startBtn.style.backgroundColor = '#1a73e8';
         this.statusDisplay.textContent = '准备就绪';
-        this.motionBuffer = [];
+        this.accelerationBuffer = [];
+        this.orientationBuffer = [];
+        this.squatState = 'standing';
+        this.lastStateChangeTime = Date.now();
     }
 }
 

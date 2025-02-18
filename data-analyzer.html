@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蹲起数据分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        canvas {
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chart-container">
+        <canvas id="accelerationChart"></canvas>
+        <canvas id="orientationChart"></canvas>
+    </div>
+    <script>
+        // 读取数据文件
+        fetch('squat-motion-data-2025-02-18T13_34_57.964Z.json')
+            .then(response => response.json())
+            .then(data => {
+                const timestamps = data.map(d => d.timestamp / 1000); // 转换为秒
+                
+                // 加速度数据
+                const accelerationData = {
+                    labels: timestamps,
+                    datasets: [
+                        {
+                            label: 'X轴加速度',
+                            data: data.map(d => d.acceleration?.x),
+                            borderColor: 'rgb(255, 99, 132)',
+                            fill: false
+                        },
+                        {
+                            label: 'Y轴加速度',
+                            data: data.map(d => d.acceleration?.y),
+                            borderColor: 'rgb(75, 192, 192)',
+                            fill: false
+                        },
+                        {
+                            label: 'Z轴加速度',
+                            data: data.map(d => d.acceleration?.z),
+                            borderColor: 'rgb(54, 162, 235)',
+                            fill: false
+                        }
+                    ]
+                };
+
+                // 方向数据
+                const orientationData = {
+                    labels: timestamps,
+                    datasets: [
+                        {
+                            label: 'Alpha (指南针)',
+                            data: data.map(d => d.orientation?.alpha),
+                            borderColor: 'rgb(255, 99, 132)',
+                            fill: false
+                        },
+                        {
+                            label: 'Beta (前后倾斜)',
+                            data: data.map(d => d.orientation?.beta),
+                            borderColor: 'rgb(75, 192, 192)',
+                            fill: false
+                        },
+                        {
+                            label: 'Gamma (左右倾斜)',
+                            data: data.map(d => d.orientation?.gamma),
+                            borderColor: 'rgb(54, 162, 235)',
+                            fill: false
+                        }
+                    ]
+                };
+
+                // 创建加速度图表
+                const accelerationCtx = document.getElementById('accelerationChart').getContext('2d');
+                new Chart(accelerationCtx, {
+                    type: 'line',
+                    data: accelerationData,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: '加速度数据'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: '时间 (秒)'
+                                }
+                            },
+                            y: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: '加速度 (m/s²)'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // 创建方向图表
+                const orientationCtx = document.getElementById('orientationChart').getContext('2d');
+                new Chart(orientationCtx, {
+                    type: 'line',
+                    data: orientationData,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: '设备方向数据'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: '时间 (秒)'
+                                }
+                            },
+                            y: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: '角度 (度)'
+                                }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading data:', error));
+    </script>
+</body>
+</html>
