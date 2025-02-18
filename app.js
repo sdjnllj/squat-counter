@@ -11,22 +11,22 @@ class SquatCounter {
         this.orientationBuffer = [];
         this.bufferSize = 5; // 滑动窗口大小
         
-        // 动作阈值（基于数据分析，放宽条件）
+        // 动作阈值（进一步放宽条件）
         this.thresholds = {
             standing: {
-                yAccel: -7,      // 从 -8 改为 -7，放宽站立条件
-                beta: 40         // 从 35 改为 40，适应更自然的站姿
+                yAccel: -6.5,    // 从 -7 改为 -6.5
+                beta: 45         // 从 40 改为 45
             },
             squatting: {
-                yAccel: -4,      // 从 -3.5 改为 -4，放宽下蹲条件
-                beta: 60         // 从 65 改为 60，降低下蹲角度要求
+                yAccel: -4.5,    // 从 -4 改为 -4.5
+                beta: 55         // 从 60 改为 55
             }
         };
         
         // 时间窗口限制
-        this.minActionTime = 800;   // 从 1000 改为 800，允许更快的动作
-        this.maxActionTime = 5000;  // 从 4000 改为 5000，允许更慢的动作
-        this.cooldownTime = 300;    // 从 500 改为 300，更快地允许下一个动作
+        this.minActionTime = 500;   // 从 800 改为 500，允许更快的动作
+        this.maxActionTime = 6000;  // 从 5000 改为 6000，允许更慢的动作
+        this.cooldownTime = 200;    // 从 300 改为 200，更快地允许下一个动作
         
         // 音频反馈
         this.audioContext = null;
@@ -90,9 +90,15 @@ class SquatCounter {
 
     updateSensitivity() {
         const value = parseFloat(this.sensitivitySlider.value);
-        // 根据速度设置调整时间窗口
-        this.minActionTime = 1500 - value * 150; // 从 2000 改为 1500，整体提速
-        this.maxActionTime = 5000 - value * 300; // 调整最大时间范围
+        // 根据速度设置调整时间窗口（更灵活的范围）
+        this.minActionTime = 1200 - value * 120; // 从 1500 改为 1200
+        this.maxActionTime = 6000 - value * 400; // 调整最大时间范围
+        
+        // 根据速度调整阈值
+        const speedFactor = value / 5; // 1-10 变为 0.2-2
+        this.thresholds.standing.yAccel = -6.5 * speedFactor;
+        this.thresholds.squatting.yAccel = -4.5 * speedFactor;
+        
         this.sensitivityValue.textContent = value.toFixed(1);
         
         if (this.isTracking) {
@@ -150,8 +156,8 @@ class SquatCounter {
                 时间: ${stateInfo.timeSince}ms<br>
                 加速度Y: ${stateInfo.yAccel}<br>
                 角度β: ${stateInfo.beta}°<br>
-                站立阈值: Y=${stateInfo.thresholds.standing.yAccel}, β=${stateInfo.thresholds.standing.beta}°<br>
-                下蹲阈值: Y=${stateInfo.thresholds.squatting.yAccel}, β=${stateInfo.thresholds.squatting.beta}°
+                站立阈值: Y=${stateInfo.thresholds.standing.yAccel.toFixed(2)}, β=${stateInfo.thresholds.standing.beta}°<br>
+                下蹲阈值: Y=${stateInfo.thresholds.squatting.yAccel.toFixed(2)}, β=${stateInfo.thresholds.squatting.beta}°
             `;
         }
     }
@@ -182,28 +188,28 @@ class SquatCounter {
                 时间: ${stateInfo.timeSince}ms<br>
                 加速度Y: ${stateInfo.yAccel}<br>
                 角度β: ${stateInfo.beta}°<br>
-                站立阈值: Y=${stateInfo.thresholds.standing.yAccel}, β=${stateInfo.thresholds.standing.beta}°<br>
-                下蹲阈值: Y=${stateInfo.thresholds.squatting.yAccel}, β=${stateInfo.thresholds.squatting.beta}°
+                站立阈值: Y=${stateInfo.thresholds.standing.yAccel.toFixed(2)}, β=${stateInfo.thresholds.standing.beta}°<br>
+                下蹲阈值: Y=${stateInfo.thresholds.squatting.yAccel.toFixed(2)}, β=${stateInfo.thresholds.squatting.beta}°
             `;
         }
 
         // 状态机逻辑
         switch (this.squatState) {
             case 'standing':
-                // 检测下蹲开始（放宽条件）
+                // 检测下蹲开始（进一步放宽条件）
                 if (timeSinceLastChange > this.cooldownTime &&
-                    currentYAccel > this.thresholds.squatting.yAccel * 0.9 && // 增加 10% 容差
-                    avgBeta > this.thresholds.squatting.beta * 0.9) {        // 增加 10% 容差
+                    (currentYAccel > this.thresholds.squatting.yAccel * 0.8 || // 增加到 20% 容差
+                     avgBeta > this.thresholds.squatting.beta * 0.8)) {       // 增加到 20% 容差
                     this.squatState = 'squatting';
                     this.lastStateChangeTime = now;
                 }
                 break;
 
             case 'squatting':
-                // 检测起立开始（放宽条件）
+                // 检测起立开始（使用 OR 逻辑代替 AND）
                 if (timeSinceLastChange > this.minActionTime &&
-                    (currentYAccel < this.thresholds.standing.yAccel * 1.1 || // 增加 10% 容差
-                     avgBeta < this.thresholds.standing.beta * 1.1)) {        // 增加 10% 容差
+                    (currentYAccel < this.thresholds.standing.yAccel * 1.2 || // 增加到 20% 容差
+                     avgBeta < this.thresholds.standing.beta * 1.2)) {       // 增加到 20% 容差
                     this.squatState = 'rising';
                     this.lastStateChangeTime = now;
                 }
@@ -215,11 +221,11 @@ class SquatCounter {
                 break;
 
             case 'rising':
-                // 完成一次蹲起（放宽条件）
+                // 完成一次蹲起（更宽松的条件）
                 if (timeSinceLastChange > this.cooldownTime &&
-                    ((currentYAccel >= this.thresholds.standing.yAccel * 0.7 && // 增加更大容差
-                      avgBeta <= this.thresholds.standing.beta * 1.3) ||       // 增加更大容差
-                     (timeSinceLastChange > this.minActionTime * 1.5))) {      // 添加基于时间的备选条件
+                    ((currentYAccel >= this.thresholds.standing.yAccel * 0.6 || // 增加到 40% 容差
+                      avgBeta <= this.thresholds.standing.beta * 1.4) ||       // 增加到 40% 容差
+                     (timeSinceLastChange > this.minActionTime))) {           // 只要超过最小时间就算完成
                     this.squatState = 'standing';
                     this.lastStateChangeTime = now;
                     this.incrementCounter();
