@@ -38,7 +38,9 @@ class SquatCounter {
         
         // 音频反馈
         this.audioContext = null;
-        this.initAudioContext();
+        this.speechSynthesis = window.speechSynthesis;
+        this.speechUtterance = null;
+        this.isSpeechInitialized = false;
 
         // DOM 元素
         this.counterDisplay = document.getElementById('counter');
@@ -57,10 +59,6 @@ class SquatCounter {
         // 初始化传感器
         this.initializeSensors();
         this.updateSensitivity();
-
-        // 语音合成器
-        this.speechSynthesis = window.speechSynthesis;
-        this.speechUtterance = null;
     }
 
     async initializeSensors() {
@@ -95,9 +93,23 @@ class SquatCounter {
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
+            // 同时初始化语音合成
+            if (!this.isSpeechInitialized) {
+                this.initSpeechSynthesis();
+            }
             document.removeEventListener('click', initAudio);
         };
         document.addEventListener('click', initAudio);
+    }
+
+    initSpeechSynthesis() {
+        // 创建一个测试用的语音实例
+        const testUtterance = new SpeechSynthesisUtterance('');
+        testUtterance.lang = 'zh-CN';
+        testUtterance.volume = 0; // 设置音量为0，用户听不到
+        this.speechSynthesis.speak(testUtterance);
+        this.isSpeechInitialized = true;
+        console.log('Speech synthesis initialized');
     }
 
     updateSensitivity() {
@@ -297,6 +309,11 @@ class SquatCounter {
 
     // 播报数字
     speakNumber(number) {
+        // 确保语音已初始化
+        if (!this.isSpeechInitialized) {
+            this.initSpeechSynthesis();
+        }
+
         // 如果正在播放，先停止
         if (this.speechSynthesis.speaking) {
             this.speechSynthesis.cancel();
@@ -311,6 +328,7 @@ class SquatCounter {
         
         // 开始播放
         this.speechSynthesis.speak(this.speechUtterance);
+        console.log('Speaking number:', number);
     }
 
     incrementCounter() {
