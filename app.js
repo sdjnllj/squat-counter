@@ -57,6 +57,10 @@ class SquatCounter {
         // 初始化传感器
         this.initializeSensors();
         this.updateSensitivity();
+
+        // 语音合成器
+        this.speechSynthesis = window.speechSynthesis;
+        this.speechUtterance = null;
     }
 
     async initializeSensors() {
@@ -291,10 +295,29 @@ class SquatCounter {
         oscillator.stop(this.audioContext.currentTime + 0.15);
     }
 
+    // 播报数字
+    speakNumber(number) {
+        // 如果正在播放，先停止
+        if (this.speechSynthesis.speaking) {
+            this.speechSynthesis.cancel();
+        }
+        
+        // 创建新的语音播报
+        this.speechUtterance = new SpeechSynthesisUtterance(number.toString());
+        this.speechUtterance.lang = 'zh-CN'; // 设置为中文
+        this.speechUtterance.rate = 1.0; // 语速
+        this.speechUtterance.pitch = 1.0; // 音高
+        this.speechUtterance.volume = 1.0; // 音量
+        
+        // 开始播放
+        this.speechSynthesis.speak(this.speechUtterance);
+    }
+
     incrementCounter() {
         this.counter++;
         this.counterDisplay.textContent = this.counter;
         this.playCountSound();
+        this.speakNumber(this.counter); // 添加语音播报
         this.counterDisplay.style.transform = 'scale(1.2)';
         setTimeout(() => {
             this.counterDisplay.style.transform = 'scale(1)';
